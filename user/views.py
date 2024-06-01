@@ -4,16 +4,21 @@ import os
 from django.contrib.auth import login
 from django.contrib.auth.models import User
 from django.http import JsonResponse
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.csrf import csrf_exempt
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, serializers, status
 from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.generics import RetrieveAPIView
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Person
-from .serializers import PersonSerializer
+from .models import Person, Task
+from .serializers import PersonSerializer, TaskSerializer
 from .services import GoogleRawLoginFlowService, create_user, handle_person_serializer
 
 
@@ -135,3 +140,68 @@ def register(request):
     return JsonResponse(
         {"message": "Invalid request."}, status=status.HTTP_400_BAD_REQUEST
     )
+
+
+class TaskRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Task.objects.all()
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        obj = super().get_object()
+        person = get_object_or_404(Person, user=self.request.user)
+        if obj.person != person:
+            raise PermissionDenied("You do not have permission to perform this action.")
+        return obj
+
+    def perform_update(self, serializer):
+        person = get_object_or_404(Person, user=self.request.user)
+        if serializer.instance.person != person:
+            raise PermissionDenied("You do not have permission to perform this action.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        person = get_object_or_404(Person, user=self.request.user)
+        if instance.person != person:
+            raise PermissionDenied("You do not have permission to perform this action.")
+        instance.delete()
+
+
+class TaskListCreateView(generics.ListCreateAPIView):
+    queryset = Task.objects.all()
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["title", "due_date", "is_completed"]
+    search_fields = ["title"]
+    ordering_fields = ["due_date"]
+
+    def get_queryset(self):
+        person = get_object_or_404(Person, user=self.request.user)
+        return Task.objects.filter(person=person)
+
+    def perform_create(self, serializer):
+        person = get_object_or_404(Person, user=self.request.user)
+        serializer.save(person=person)
+
+
+class MeView(RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PersonSerializer
+    pagination_class = PageNumberPagination
+
+    def get(self, request, *args, **kwargs):
+        person = get_object_or_404(Person, user=self.request.user)
+        person_serializer = self.serializer_class(person)
+        tasks = Task.objects.filter(person=person).order_by("-created_at")
+
+        paginator = self.pagination_class()
+        result_page = paginator.paginate_queryset(tasks, request)
+        tasks_serializer = TaskSerializer(result_page, many=True)
+
+        data = {
+            "me": person_serializer.data,
+            "tasks": tasks_serializer.data,
+        }
+
+        return paginator.get_paginated_response(data)

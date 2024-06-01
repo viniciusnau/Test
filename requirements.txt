@@ -46,3 +46,4 @@ drf-yasg
 oauthlib
 pyjwt
 requests
+django-filter
