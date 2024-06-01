@@ -109,3 +109,47 @@ class PersonListCreateView(generics.ListCreateAPIView):
     queryset = Person.objects.all()
     serializer_class = PersonSerializer
     permission_classes = [IsAdminUser]
+
+
+@csrf_exempt
+def register(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            person_data = data.get("person")
+            password = person_data["password"]
+            user = User.objects.create(
+                username=person_data["email"],
+                email=person_data["email"],
+                first_name=person_data["first_name"],
+                last_name=person_data["last_name"],
+                is_superuser=False,
+                is_active=True,
+                is_staff=False,
+            )
+            user.set_password(password)
+            user.save()
+
+            if user:
+                person_data["user"] = user.id
+                person_serializer = PersonSerializer(data=person_data)
+
+                if person_serializer.is_valid():
+                    person_serializer.save()
+
+                    return JsonResponse(
+                        person_serializer.data, status=status.HTTP_201_CREATED
+                    )
+                else:
+                    user.delete()
+                    return JsonResponse(
+                        person_serializer.errors, status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                return JsonResponse(
+                    {"message": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    return JsonResponse({"message": "Invalid request."}, status=400)

@@ -5,7 +5,8 @@ from user.views import (
     GoogleLoginApi,
     GoogleLoginRedirectApi,
     PersonListCreateView,
-    PersonRetrieveUpdateDestroyView
+    PersonRetrieveUpdateDestroyView,
+    register,
 )
 
 app_name = "user"
@@ -21,6 +22,11 @@ urlpatterns = [
         "<int:pk>/",
         PersonRetrieveUpdateDestroyView.as_view(),
         name="person-retrieve-update-destroy",
+    ),
+        path(
+        "register/",
+        csrf_exempt(register),
+        name="register",
     ),
     path(
         "google-redirect/",
