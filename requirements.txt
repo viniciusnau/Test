@@ -47,3 +47,5 @@ oauthlib
 pyjwt
 requests
 django-filter
+moto
+mock
