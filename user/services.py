@@ -4,8 +4,13 @@ from urllib.parse import urlencode
 
 import jwt
 import requests
+from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
+from django.http import JsonResponse
 from oauthlib.common import UNICODE_ASCII_CHARACTER_SET
+from rest_framework import status
+
+from .serializers import PersonSerializer
 
 
 class GoogleRawLoginCredentials:
@@ -119,3 +124,31 @@ class GoogleRawLoginFlowService:
         )
 
         return response.json()
+
+
+def create_user(person_data):
+    user = User.objects.create(
+        username=person_data["email"],
+        email=person_data["email"],
+        first_name=person_data["first_name"],
+        last_name=person_data["last_name"],
+        is_superuser=False,
+        is_active=True,
+        is_staff=False,
+    )
+    user.set_password(person_data["password"])
+    user.save()
+    return user
+
+
+def handle_person_serializer(user, person_data):
+    person_data["user"] = user.id
+    person_serializer = PersonSerializer(data=person_data)
+    if person_serializer.is_valid():
+        person_serializer.save()
+        return JsonResponse(person_serializer.data, status=status.HTTP_201_CREATED)
+    else:
+        user.delete()
+        return JsonResponse(
+            person_serializer.errors, status=status.HTTP_400_BAD_REQUEST
+        )

@@ -2,7 +2,6 @@ from django.urls import include, path
 
 from swagger_config import schema_view
 
-
 urlpatterns = [
     path("api/user/", include("user.urls")),
     path(

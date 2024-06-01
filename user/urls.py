@@ -23,7 +23,7 @@ urlpatterns = [
         PersonRetrieveUpdateDestroyView.as_view(),
         name="person-retrieve-update-destroy",
     ),
-        path(
+    path(
         "register/",
         csrf_exempt(register),
         name="register",

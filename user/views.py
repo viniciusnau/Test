@@ -1,26 +1,20 @@
-import os
-import random
-import string
 import json
+import os
 
 from django.contrib.auth import login
 from django.contrib.auth.models import User
-from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework import filters, generics, serializers, status
+from rest_framework import generics, serializers, status
 from rest_framework.authtoken.models import Token
-from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Person
-from .serializers import (
-    PersonSerializer
-)
-from .services import GoogleRawLoginFlowService
+from .serializers import PersonSerializer
+from .services import GoogleRawLoginFlowService, create_user, handle_person_serializer
 
 
 class PublicApi(APIView):
@@ -119,39 +113,25 @@ def register(request):
         try:
             data = json.loads(request.body)
             person_data = data.get("person")
-            password = person_data["password"]
-            user = User.objects.create(
-                username=person_data["email"],
-                email=person_data["email"],
-                first_name=person_data["first_name"],
-                last_name=person_data["last_name"],
-                is_superuser=False,
-                is_active=True,
-                is_staff=False,
-            )
-            user.set_password(password)
-            user.save()
-
-            if user:
-                person_data["user"] = user.id
-                person_serializer = PersonSerializer(data=person_data)
-
-                if person_serializer.is_valid():
-                    person_serializer.save()
-
-                    return JsonResponse(
-                        person_serializer.data, status=status.HTTP_201_CREATED
-                    )
-                else:
-                    user.delete()
-                    return JsonResponse(
-                        person_serializer.errors, status=status.HTTP_400_BAD_REQUEST
-                    )
-            else:
+            if not person_data:
                 return JsonResponse(
-                    {"message": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Missing person data"}, status=status.HTTP_400_BAD_REQUEST
                 )
+
+            user = create_user(person_data)
+            return handle_person_serializer(user, person_data)
+
+        except json.JSONDecodeError:
+            return JsonResponse(
+                {"error": "Invalid JSON"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except KeyError as e:
+            return JsonResponse(
+                {"error": f"Missing key: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    return JsonResponse({"message": "Invalid request."}, status=400)
+    return JsonResponse(
+        {"message": "Invalid request."}, status=status.HTTP_400_BAD_REQUEST
+    )
