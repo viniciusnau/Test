@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import filters, generics, serializers, status
 from rest_framework.authtoken.models import Token
 from rest_framework.pagination import PageNumberPagination
